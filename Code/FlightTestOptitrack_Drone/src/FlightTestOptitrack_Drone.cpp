@@ -7,19 +7,14 @@
 #include <DebugDefs.hpp>
 #include <ESPNOWComm.hpp>
 #include <TimeSync.hpp>
+#include <INA.h>
 #include "Tasks.hpp"
+#include "HardwareDefs.hpp"
 
 using std::array;
 
-#define LED_R 48
-#define LED_G 33
-#define LED_B 47
-
-// ESP-NOW settings
-array<uint8_t, 6> station_MAC = {0xF4, 0x12, 0xFA, 0x88, 0x13, 0xD0};
-// array<uint8_t, 6> spinon_MAC = {0x64, 0xE8, 0x33, 0x72, 0x02, 0x94}; // Spinon 21
-array<uint8_t, 6> spinon_MAC = {0x64, 0xE8, 0x33, 0x72, 0x02, 0xF4}; // Spinon 22
-constexpr int WiFi_channel = 14;
+// Power monitoring setup
+INA_Class INA; // INA class instance for power monitoring
 
 // // temp
 // hw_timer_t *temp_timer;
@@ -35,7 +30,7 @@ void setup()
 
     digitalWrite(LED_R, LOW);
     digitalWrite(LED_G, LOW);
- digitalWrite(LED_B, LOW);
+    digitalWrite(LED_B, LOW);
     vTaskDelay(500);
     digitalWrite(LED_R, HIGH);
     digitalWrite(LED_G, HIGH);
@@ -50,9 +45,27 @@ void setup()
     digitalWrite(LED_B, HIGH);
 
     Serial.begin(115200);
-    Serial.printf("------ Init start on core %d! ------\n",xPortGetCoreID());
+    Serial.printf("------ Init start on core %d! ------\n", xPortGetCoreID());
 
     Motor::Init();
+
+    // Initialize INA power monitoring
+    Serial.println("Initializing INA power monitoring...");
+    uint8_t devicesFound = INA.begin(MAXIMUM_AMPS, SHUNT_MICRO_OHM);
+    if (devicesFound == 0)
+    {
+        Serial.println("Warning: No INA device found!");
+    }
+    else
+    {
+        Serial.printf("Found %d INA device(s)\n", devicesFound);
+        // Configure INA settings for continuous monitoring
+        INA.setBusConversion(8500);            // Maximum conversion time 8.244ms
+        INA.setShuntConversion(8500);          // Maximum conversion time 8.244ms
+        INA.setAveraging(16);                  // Average readings for better accuracy
+        INA.setMode(INA_MODE_CONTINUOUS_BOTH); // Continuously measure bus and shunt
+        Serial.println("INA power monitoring initialized successfully");
+    }
 
     if (ESPNOWCOMM::Init(WiFi_channel) != 0)
     {
